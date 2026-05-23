@@ -1,0 +1,10 @@
+name: dbd_test
+version: "1.0.0"
+profile: dbd_test
+config-version: 2
+
+model-paths: ["models"]
+
+models:
+  dbd_test:
+    +materialized: table
