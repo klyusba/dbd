@@ -26,8 +26,17 @@ uv sync
 uv run dbd-manager --host 0.0.0.0 --port 8080
 ```
 
-Configure BigQuery connectivity for workers via env vars (inherited from the
-manager process):
+Configure the warehouse for workers via env vars (inherited from the manager
+process). Pick the adapter with `DBD_WAREHOUSE` (`bigquery` by default,
+`sqlite` also supported):
+
+| variable | meaning | default |
+| --- | --- | --- |
+| `DBD_WAREHOUSE` | adapter: `bigquery` or `sqlite` | `bigquery` |
+| `DBD_WORKER_BOOT_TIMEOUT` | seconds to wait for a worker to become healthy | `120` |
+| `DBD_LOG_LEVEL` | log level for both processes | `INFO` |
+
+### BigQuery (`DBD_WAREHOUSE=bigquery`)
 
 | variable | meaning | default |
 | --- | --- | --- |
@@ -35,11 +44,17 @@ manager process):
 | `DBD_BQ_DATASET` | target dataset | `analytics` |
 | `DBD_BQ_LOCATION` | BigQuery location | `US` |
 | `DBD_BQ_THREADS` | dbt threads | `4` |
-| `DBD_WORKER_BOOT_TIMEOUT` | seconds to wait for a worker to become healthy | `120` |
-| `DBD_LOG_LEVEL` | log level for both processes | `INFO` |
 
 GCP credentials are picked up via Application Default Credentials (e.g.
 `GOOGLE_APPLICATION_CREDENTIALS` or `gcloud auth application-default login`).
+
+### SQLite (`DBD_WAREHOUSE=sqlite`)
+
+| variable | meaning | default |
+| --- | --- | --- |
+| `DBD_SQLITE_PATH` | absolute path to the `.db` file | `<project_dir>/dbd.sqlite` |
+| `DBD_SQLITE_SCHEMA` | attached schema name dbt writes to | `main` |
+| `DBD_SQLITE_THREADS` | dbt threads | `1` |
 
 ## API
 

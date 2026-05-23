@@ -464,11 +464,12 @@ wheels = [
 [[package]]
 name = "dbd"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "dbt-bigquery" },
     { name = "dbt-core" },
+    { name = "dbt-sqlite" },
     { name = "google-cloud-storage" },
     { name = "pyyaml" },
 ]
@@ -478,6 +479,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.10" },
     { name = "dbt-bigquery", specifier = ">=1.8" },
     { name = "dbt-core", specifier = ">=1.8" },
+    { name = "dbt-sqlite", specifier = ">=1.4" },
     { name = "google-cloud-storage", specifier = ">=2.18" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
@@ -632,6 +634,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b0/91/c702d8fb143541fda10f5eb7a7a89f34bda38ee043ecb3e3653363d0c5a0/dbt_semantic_interfaces-0.9.0.tar.gz", hash = "sha256:5c921257dce8bb51c9ffb5479f2bdd959e16ebfb98ee833de6daa70788c47271", size = 93865 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/82/41708b2b69d5fead88dea5ca0d863d6291da83ca6f1bd19246842d397e2b/dbt_semantic_interfaces-0.9.0-py3-none-any.whl", hash = "sha256:1b54c06ba89190a47a7f0563360930a0cce869e55b484ca09d261ade0e319155", size = 147008 },
+]
+
+[[package]]
+name = "dbt-sqlite"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dbt-core" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/51/00/e65f10afdda193da78346893a93db502e629374f76ed6921f21dd35bd841/dbt-sqlite-1.4.0.tar.gz", hash = "sha256:f1fcacd057b78f0a48c1a84bff7d3ff31cd1c34bbffa02933f2f9d31ddfd0a3b", size = 20055 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e3/6a/c814306bf0d74f73292100aa9409a3c470e992adb05aa322bee3fdee8dfc/dbt_sqlite-1.4.0-py3-none-any.whl", hash = "sha256:4ef86682e6fb4940088b824cfb986465b5d66ed589ebfc3071238d915c37aa4e", size = 22870 },
 ]
 
 [[package]]

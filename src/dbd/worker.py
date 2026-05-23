@@ -108,7 +108,7 @@ def build_app(project_dir: Path) -> web.Application:
     app[JOBS] = {}
     # dbt is CPU/IO heavy and not asyncio-friendly; one job at a time keeps
     # the worker simple and avoids fighting dbt's global state.
-    app[EXECUTOR] = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dbt")
+    app[EXECUTOR] = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dbt")  # TODO get max_workers setting from env
     app.router.add_get("/health", health)
     app.router.add_post("/job", post_job)
     app.router.add_get("/job/{job_id}", get_job)
