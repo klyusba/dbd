@@ -1,6 +1,4 @@
 """Helpers to download a dbt project from Google Cloud Storage."""
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 from urllib.parse import urlparse
@@ -52,7 +50,7 @@ def download_project(url: str, dest: Path) -> Path:
         log.debug("downloading %s -> %s", blob.name, target)
         blob.download_to_filename(target)
 
-    return _find_project_root(dest)
+    return dest  # _find_project_root(dest)
 
 
 def _find_project_root(root: Path) -> Path:

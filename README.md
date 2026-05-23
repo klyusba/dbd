@@ -99,3 +99,26 @@ src/dbd/
   profiles.py   # writes BigQuery profiles.yml
   models.py     # JobSpec / JobStatus
 ```
+
+## End-to-end tests (Docker)
+
+A self-contained docker-compose stack exercises the whole pipeline against
+emulators — no real GCP credentials needed:
+
+- `fake-gcs-server` plays the role of GCS (honoured via `STORAGE_EMULATOR_HOST`).
+- `goccy/bigquery-emulator` plays the role of BigQuery. The dbd image ships a
+  tiny `.pth`-activated shim (`docker/bq_emulator_patch.py`) that redirects
+  `google.cloud.bigquery.Client` to the emulator endpoint with anonymous
+  credentials whenever `DBD_BQ_EMULATOR_HOST` is set. The shim is a no-op when
+  the env var is unset, so production builds are unaffected.
+
+Run the full stack:
+
+```bash
+docker compose -f docker-compose.e2e.yml build
+docker compose -f docker-compose.e2e.yml run --rm --build e2e
+```
+
+The `e2e` container uploads a sample dbt project to fake-gcs, posts a job to
+the manager, polls `/job/{id}` until it terminates, and exits non-zero if the
+job didn't finish `done`. Sample project lives in `docker/e2e/sample-project/`.
