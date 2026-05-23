@@ -94,7 +94,7 @@ def _run_dbt_sync(project_dir: Path, args: list[str]) -> tuple[bool, str | None]
         )
         results = task.run()
         success = task.interpret_results(results)
-    except BaseException as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
         log.exception("RunTask invocation failed")
         return False, repr(exc)
 
