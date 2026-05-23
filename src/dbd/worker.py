@@ -58,8 +58,13 @@ def _patch_run_task() -> None:
         _run_task_cache["manifest"] = manifest
         _run_task_cache["instance"] = self
 
-    RunTask.__init__ = patched_init  # type: ignore[method-assign]
-    RunTask._dbd_patched = True  # type: ignore[attr-defined]
+    def compile_manifest(self) -> None:
+        if self.graph is None:
+            self.graph = self.compiler.compile(self.manifest)
+
+    RunTask.__init__ = patched_init
+    RunTask.compile_manifest = compile_manifest
+    RunTask._dbd_patched = True
 
 
 def _warm_up_dbt(project_dir: Path) -> None:
@@ -71,7 +76,9 @@ def _warm_up_dbt(project_dir: Path) -> None:
         "run", "--exclude", '"*"',
         "--project-dir", str(project_dir),
         "--profiles-dir", str(project_dir),
+        "--no-write-json"
     ]
+    # TODO if project_dir contain manifest.json or manifest.msgpack - load it and pass to dbtRunner
     result = dbtRunner().invoke(args)
     if result.exception is not None:
         raise RuntimeError(f"dbt warm-up failed: {result.exception!r}")
