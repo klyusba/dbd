@@ -109,7 +109,7 @@ emulators — no real GCP credentials needed:
 - `goccy/bigquery-emulator` plays the role of BigQuery. The dbd image ships a
   tiny `.pth`-activated shim (`docker/bq_emulator_patch.py`) that redirects
   `google.cloud.bigquery.Client` to the emulator endpoint with anonymous
-  credentials whenever `DBD_BQ_EMULATOR_HOST` is set. The shim is a no-op when
+  credentials whenever `BIGQUERY_EMULATOR_HOST` is set. The shim is a no-op when
   the env var is unset, so production builds are unaffected.
 
 Run the full stack:

@@ -31,7 +31,6 @@ def _install() -> None:
 
     try:
         import google.auth
-        # from google.api_core.client_options import ClientOptions
         from google.auth.credentials import AnonymousCredentials
         from google.cloud import bigquery
     except Exception:
@@ -57,7 +56,6 @@ def _install() -> None:
             bound = original_sig.bind_partial(self, *args, **kwargs)
             merged = dict(bound.arguments)
             merged.pop("self", None)
-            # merged["client_options"] = ClientOptions(api_endpoint=endpoint)
             merged["credentials"] = AnonymousCredentials()
             merged.setdefault("project", project)
             original_init(self, **merged)
