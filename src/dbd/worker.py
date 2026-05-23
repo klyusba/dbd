@@ -87,6 +87,8 @@ def _warm_up_dbt(project_dir: Path) -> None:
     # prevent writing partial_parse.msgpack
     dbt.parser.manifest.ManifestLoader.write_manifest_for_partial_parse = lambda *args: None
 
+    # TODO do dbt deps before run. skip if there is a manifest
+
     args = [
         "run", "--exclude", '*',
         "--project-dir", str(project_dir),

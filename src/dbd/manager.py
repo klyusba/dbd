@@ -43,13 +43,31 @@ class Worker:
     process: asyncio.subprocess.Process
     session: aiohttp.ClientSession = field(repr=False)
 
+    @property
+    def base_url(self):
+        return 'http://worker'
+
+    async def wait_for_health(self, timeout: float) -> None:
+        deadline = asyncio.get_running_loop().time() + timeout
+        last_error: Exception | None = None
+        while asyncio.get_running_loop().time() < deadline:
+            try:
+                async with self.session.get(f"{self.base_url}/health") as resp:
+                    if resp.status == 200:
+                        return
+                    last_error = RuntimeError(f"health returned {resp.status}")
+            except (aiohttp.ClientError, OSError) as exc:
+                last_error = exc
+            await asyncio.sleep(WORKER_HEALTH_INTERVAL)
+        raise TimeoutError(f"worker did not become healthy in {timeout}s: {last_error!r}")
+
     async def close(self) -> None:
         if not self.session.closed:
             await self.session.close()
         if self.process.returncode is None:
             self.process.terminate()
             try:
-                await asyncio.wait_for(self.process.wait(), timeout=10)
+                await asyncio.wait_for(self.process.wait(), timeout=10)  # TODO let the worker finish the job
             except asyncio.TimeoutError:
                 self.process.kill()
                 await self.process.wait()
@@ -72,19 +90,7 @@ def _make_session(socket_path: Path) -> aiohttp.ClientSession:
     )
 
 
-async def _wait_for_health(session: aiohttp.ClientSession, timeout: float) -> None:
-    deadline = asyncio.get_running_loop().time() + timeout
-    last_error: Exception | None = None
-    while asyncio.get_running_loop().time() < deadline:
-        try:
-            async with session.get("http://worker/health") as resp:
-                if resp.status == 200:
-                    return
-                last_error = RuntimeError(f"health returned {resp.status}")
-        except (aiohttp.ClientError, OSError) as exc:
-            last_error = exc
-        await asyncio.sleep(WORKER_HEALTH_INTERVAL)
-    raise TimeoutError(f"worker did not become healthy in {timeout}s: {last_error!r}")
+
 
 
 async def _spawn_worker(app: web.Application, project_url: str) -> Worker:
@@ -106,8 +112,14 @@ async def _spawn_worker(app: web.Application, project_url: str) -> Worker:
     )
 
     session = _make_session(socket_path)
+    worker = Worker(
+        project_url=project_url,
+        socket_path=socket_path,
+        process=process,
+        session=session,
+    )
     try:
-        await _wait_for_health(session, WORKER_BOOT_TIMEOUT)
+        await worker.wait_for_health(WORKER_BOOT_TIMEOUT)
     except Exception:
         await session.close()
         if process.returncode is None:
@@ -120,12 +132,7 @@ async def _spawn_worker(app: web.Application, project_url: str) -> Worker:
         socket_path.unlink(missing_ok=True)
         raise
 
-    return Worker(
-        project_url=project_url,
-        socket_path=socket_path,
-        process=process,
-        session=session,
-    )
+    return worker
 
 
 async def _get_or_spawn_worker(
@@ -179,7 +186,7 @@ async def _provision_and_submit(
 
     try:
         async with worker.session.post(
-            "http://worker/job",
+            f"{worker.base_url}/job",
             json=spec.to_dict(),
         ) as resp:
             if resp.status >= 400:
@@ -201,6 +208,16 @@ async def _provision_and_submit(
 
 
 async def post_job(request: web.Request) -> web.Response:
+    """
+    request params:
+        - url: url to project
+        - select, except, full_refresh: arguments of dbt
+        - no_cache: force to reload the project (default: false)
+        - job_id: optional job id (default: uuid4)
+    return:
+        - job_id (if no error)
+        - error (otherwise)
+    """
     try:
         payload: dict = await request.json()
     except Exception:
@@ -253,11 +270,8 @@ async def get_job(request: web.Request) -> web.Response:
     if worker is None:
         return web.json_response({"error": "unknown job"}, status=404)
 
-    if worker is None:
-        return web.json_response({"state": "pending"}, status=200)
-
     try:
-        async with worker.session.get(f"http://worker/job/{job_id}") as resp:
+        async with worker.session.get(f"{worker.base_url}/job/{job_id}") as resp:
             body = await resp.json()
             return web.json_response(body, status=resp.status)
     except aiohttp.ClientError as exc:
