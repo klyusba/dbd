@@ -5,6 +5,7 @@ TCP port. A single worker is bound to one ``gs://`` project URL for its whole
 lifetime.
 """
 import asyncio
+import copy
 import logging
 import os
 import shutil
@@ -14,7 +15,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any
+from typing import Any, Collection
 
 from aiohttp import web
 
@@ -45,6 +46,9 @@ def _patch_run_task() -> None:
     runtime config and manifest dbt produced, and reuse them for future jobs.
     """
     from dbt.task.run import RunTask
+    import dbt.compilation
+    from dbt.graph import Graph
+    from dbt.contracts.graph.nodes import ParsedNode
 
     if getattr(RunTask, "_dbd_patched", False):
         return
@@ -53,32 +57,44 @@ def _patch_run_task() -> None:
 
     def patched_init(self, args, config, manifest, batch_map=None):  # type: ignore[no-untyped-def]
         original_init(self, args, config, manifest, batch_map)
-        _run_task_cache["args"] = args
-        _run_task_cache["config"] = config
-        _run_task_cache["manifest"] = manifest
-        _run_task_cache["instance"] = self
+        if _run_task_cache == {}:
+            _run_task_cache["args"] = args
+            _run_task_cache["config"] = config
+            _run_task_cache["manifest"] = manifest
+            _run_task_cache["instance"] = self
 
     def compile_manifest(self) -> None:
         if self.graph is None:
-            self.graph = self.compiler.compile(self.manifest)
+            linker = dbt.compilation.Linker()
+            linker.link_graph(self.manifest)
+            self.graph = Graph(linker.graph)
 
     RunTask.__init__ = patched_init
     RunTask.compile_manifest = compile_manifest
     RunTask._dbd_patched = True
 
+    # prevent writing to /compiled and /run
+    ParsedNode.write_node = lambda _, *args, **kwargs: None
+
 
 def _warm_up_dbt(project_dir: Path) -> None:
     """Run ``dbt run --exclude '*'`` once to parse the project and warm the cache."""
     from dbt.cli.main import dbtRunner
+    import dbt.parser.manifest
 
     log.info("warming up dbt (parsing project)…")
+
+    # prevent writing partial_parse.msgpack
+    dbt.parser.manifest.ManifestLoader.write_manifest_for_partial_parse = lambda *args: None
+
     args = [
-        "run", "--exclude", '"*"',
+        "run", "--exclude", '*',
         "--project-dir", str(project_dir),
         "--profiles-dir", str(project_dir),
-        "--no-write-json"
+        "--no-write-json",
+        "--log-level", "none"
     ]
-    # TODO if project_dir contain manifest.json or manifest.msgpack - load it and pass to dbtRunner
+    # TODO if project_dir contains manifest.json or manifest.msgpack - load it and pass to dbtRunner
     result = dbtRunner().invoke(args)
     if result.exception is not None:
         raise RuntimeError(f"dbt warm-up failed: {result.exception!r}")
@@ -89,15 +105,21 @@ def _warm_up_dbt(project_dir: Path) -> None:
     log.info("dbt warm-up complete")
 
 
-def _run_dbt_sync(project_dir: Path, args: list[str]) -> tuple[bool, str | None]:
+def _run_dbt(select: Collection, exclude: Collection, full_refresh: bool) -> tuple[bool, str | None]:
     """Execute a dbt job by instantiating ``RunTask`` directly with cached state."""
     from dbt.task.run import RunTask
+    from dbt.cli.flags import Flags
+
+    args: Flags = copy.copy(_run_task_cache["args"])
+    args.__dict__['select'] = tuple(select)
+    args.__dict__['exclude'] = tuple(exclude)
+    args.__dict__['full_refresh'] = full_refresh
 
     try:
         task = RunTask(
-            _run_task_cache.get("args"),
-            _run_task_cache.get("config"),
-            _run_task_cache.get("manifest"),
+            args,
+            _run_task_cache["config"],
+            _run_task_cache["manifest"],
         )
         results = task.run()
         success = task.interpret_results(results)
@@ -115,9 +137,10 @@ async def _execute_job(app: web.Application, spec: JobSpec) -> None:
     try:
         success, error = await loop.run_in_executor(
             app[EXECUTOR],
-            _run_dbt_sync,
-            app[PROJECT_DIR],
-            spec.to_dbt_args(),
+            _run_dbt,
+            spec.select,
+            spec.exclude,
+            spec.full_refresh,
         )
     except Exception as exc:  # noqa: BLE001 - we want to surface anything
         log.exception("job %s crashed", spec.job_id)

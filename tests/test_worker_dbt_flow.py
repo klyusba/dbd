@@ -56,7 +56,7 @@ def test_warm_up_then_run(project_dir: Path) -> None:
     for key in ("args", "config", "manifest", "instance"):
         assert key in worker._run_task_cache, f"{key!r} missing from RunTask cache"
 
-    success, error = worker._run_dbt_sync(project_dir, ["run"])
+    success, error = worker._run_dbt(["hello.sql"], [], False)
     assert success, f"_run_dbt_sync failed: {error}"
     assert error is None
 
