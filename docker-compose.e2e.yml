@@ -1,0 +1,87 @@
+# End-to-end test stack for dbd.
+#
+#   docker compose -f docker-compose.e2e.yml build
+#   docker compose -f docker-compose.e2e.yml run --rm e2e
+#
+# The `e2e` service uploads a sample dbt project to the fake-gcs-server, posts
+# a job to the dbd manager, and polls until it reaches a terminal state.
+
+services:
+  fake-gcs:
+    image: fsouza/fake-gcs-server:1.49.2
+    command:
+      - -scheme=http
+      - -host=0.0.0.0
+      - -port=4443
+      - -public-host=fake-gcs:4443
+      # external-url is what fake-gcs embeds in mediaLink responses; without
+      # this it leaks 0.0.0.0 into URLs and download_to_filename then tries
+      # to connect to 0.0.0.0 from inside the worker container.
+      - -external-url=http://fake-gcs:4443
+      - -backend=memory
+      - -log-level=warn
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4443/storage/v1/b"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  bq-emulator:
+    # Distroless image — no shell, so we can't put a healthcheck here. The
+    # e2e runner does an explicit wait-for-port probe before posting a job.
+    image: ghcr.io/goccy/bigquery-emulator:0.6.6
+    command:
+      - --project=emulator-project
+      - --dataset=analytics
+      - --port=9050
+
+  manager:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      DBD_LOG_LEVEL: INFO
+      DBD_WAREHOUSE: bigquery
+      DBD_BQ_PROJECT: emulator-project
+      DBD_BQ_DATASET: analytics
+      DBD_BQ_LOCATION: US
+      DBD_BQ_THREADS: "1"
+      # The emulator endpoint. Picked up by the .pth-activated patch shipped
+      # in the image, which monkey-patches google.cloud.bigquery.Client.
+      BIGQUERY_EMULATOR_HOST: http://bq-emulator:9050
+      # Tell the google-cloud-storage client to talk to fake-gcs.
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
+      # Stop ADC from looking for real credentials.
+      GOOGLE_CLOUD_PROJECT: emulator-project
+    depends_on:
+      fake-gcs:
+        condition: service_healthy
+      bq-emulator:
+        condition: service_started
+    healthcheck:
+      # The manager has no /health route; any response (even 404) means it's up.
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8080/job/probe || test $? -eq 22"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  e2e:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    entrypoint: ["/bin/bash", "/app/docker/e2e/run.sh"]
+    environment:
+      MANAGER_URL: http://manager:8080
+      GCS_HOST: http://fake-gcs:4443
+      GCS_BUCKET: dbd-e2e
+      PROJECT_PREFIX: sample-project
+      BQ_EMULATOR_URL: http://bq-emulator:9050
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
+      GOOGLE_CLOUD_PROJECT: emulator-project
+    volumes:
+      - ./docker:/app/docker:ro
+    depends_on:
+      manager:
+        condition: service_healthy
+      bq-emulator:
+        condition: service_started
