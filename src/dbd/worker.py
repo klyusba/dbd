@@ -14,6 +14,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
 
 from aiohttp import web
 
@@ -29,20 +30,75 @@ JOBS = web.AppKey("jobs", dict[str, JobStatus])
 EXECUTOR = web.AppKey("executor", ThreadPoolExecutor)
 
 
-def _run_dbt_sync(project_dir: Path, args: list[str]) -> tuple[bool, str | None]:
-    """Invoke dbt programmatically. Returns ``(success, error)``."""
-    from dbt.cli.main import dbtRunner  # imported lazily so the module loads fast
+# Cache of the latest RunTask construction arguments, populated by the
+# ``_patch_run_task`` monkey-patch every time dbt instantiates a RunTask.
+# After the warm-up invocation this holds the parsed runtime config + manifest,
+# so subsequent jobs can skip the expensive project parse step.
+_run_task_cache: dict[str, Any] = {}
 
-    full_args = [
-        *args,
+
+def _patch_run_task() -> None:
+    """Monkey-patch ``RunTask.__init__`` to capture the latest instance.
+
+    dbt instantiates a fresh ``RunTask`` inside every ``dbtRunner.invoke``
+    call. Intercepting its constructor lets us keep references to the parsed
+    runtime config and manifest dbt produced, and reuse them for future jobs.
+    """
+    from dbt.task.run import RunTask
+
+    if getattr(RunTask, "_dbd_patched", False):
+        return
+
+    original_init = RunTask.__init__
+
+    def patched_init(self, args, config, manifest, batch_map=None):  # type: ignore[no-untyped-def]
+        original_init(self, args, config, manifest, batch_map)
+        _run_task_cache["args"] = args
+        _run_task_cache["config"] = config
+        _run_task_cache["manifest"] = manifest
+        _run_task_cache["instance"] = self
+
+    RunTask.__init__ = patched_init  # type: ignore[method-assign]
+    RunTask._dbd_patched = True  # type: ignore[attr-defined]
+
+
+def _warm_up_dbt(project_dir: Path) -> None:
+    """Run ``dbt run --exclude '*'`` once to parse the project and warm the cache."""
+    from dbt.cli.main import dbtRunner
+
+    log.info("warming up dbt (parsing project)…")
+    args = [
+        "run", "--exclude", '"*"',
         "--project-dir", str(project_dir),
         "--profiles-dir", str(project_dir),
     ]
-    log.info("invoking dbt: %s", full_args)
-    result = dbtRunner().invoke(full_args)
+    result = dbtRunner().invoke(args)
     if result.exception is not None:
-        return False, repr(result.exception)
+        raise RuntimeError(f"dbt warm-up failed: {result.exception!r}")
     if not result.success:
+        raise RuntimeError("dbt warm-up reported failure")
+    if "manifest" not in _run_task_cache:
+        raise RuntimeError("warm-up did not populate RunTask cache")
+    log.info("dbt warm-up complete")
+
+
+def _run_dbt_sync(project_dir: Path, args: list[str]) -> tuple[bool, str | None]:
+    """Execute a dbt job by instantiating ``RunTask`` directly with cached state."""
+    from dbt.task.run import RunTask
+
+    try:
+        task = RunTask(
+            _run_task_cache.get("args"),
+            _run_task_cache.get("config"),
+            _run_task_cache.get("manifest"),
+        )
+        results = task.run()
+        success = task.interpret_results(results)
+    except BaseException as exc:  # noqa: BLE001
+        log.exception("RunTask invocation failed")
+        return False, repr(exc)
+
+    if not success:
         return False, "dbt reported failure"
     return True, None
 
@@ -177,6 +233,8 @@ def main(argv: list[str] | None = None) -> int:
         log.info("downloading %s -> %s", args.project_url, work_dir)
         project_dir = download_project(args.project_url, work_dir)
         write_profiles(project_dir)
+        _patch_run_task()
+        _warm_up_dbt(project_dir)
         asyncio.run(_serve(socket_path, project_dir))
     finally:
         if socket_path.exists():
