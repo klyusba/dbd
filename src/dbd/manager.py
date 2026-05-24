@@ -67,7 +67,7 @@ class Worker:
         if self.process.returncode is None:
             self.process.terminate()
             try:
-                await asyncio.wait_for(self.process.wait(), timeout=10)  # TODO let the worker finish the job
+                await self.process.wait()  # let the worker finish the job
             except asyncio.TimeoutError:
                 self.process.kill()
                 await self.process.wait()
@@ -88,9 +88,6 @@ def _make_session(socket_path: Path) -> aiohttp.ClientSession:
         connector=connector,
         timeout=aiohttp.ClientTimeout(total=60),
     )
-
-
-
 
 
 async def _spawn_worker(app: web.Application, project_url: str) -> Worker:
