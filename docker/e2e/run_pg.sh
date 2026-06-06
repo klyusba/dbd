@@ -43,21 +43,21 @@ echo "[e2e] submitting 3 concurrent jobs (job-a1 + job-a2 -> project-a, job-b1 -
 
 (
     python3 /app/run_job.py \
-        --manager "${MANAGER_URL}" --url "${GS_A}" --select "*" \
+        --manager "${MANAGER_URL}" --url "${GS_A}" --select "stg_customers+" \
         >"${tmpdir}/job-a1.log" 2>&1
     echo $? >"${tmpdir}/job-a1.exit"
 ) &
 
 (
     python3 /app/run_job.py \
-        --manager "${MANAGER_URL}" --url "${GS_A}" --select "*" \
+        --manager "${MANAGER_URL}" --url "${GS_A}" --select "stg_orders+" \
         >"${tmpdir}/job-a2.log" 2>&1
     echo $? >"${tmpdir}/job-a2.exit"
 ) &
 
 (
     python3 /app/run_job.py \
-        --manager "${MANAGER_URL}" --url "${GS_B}" --select "*" \
+        --manager "${MANAGER_URL}" --url "${GS_B}" --select "stg_products+" \
         >"${tmpdir}/job-b1.log" 2>&1
     echo $? >"${tmpdir}/job-b1.exit"
 ) &
@@ -111,11 +111,9 @@ check_table() {
 
 pg_failed=0
 for table in \
-    hello \
     stg_orders stg_products stg_customers \
-    int_orders_enriched \
-    customer_lifetime_value daily_revenue product_metrics \
-    orders_incremental; do
+    customers_incremental orders_incremental products_incremental \
+    daily_revenue order_summary product_metrics; do
     check_table "${table}" || pg_failed=$((pg_failed + 1))
 done
 
