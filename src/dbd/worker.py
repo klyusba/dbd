@@ -194,6 +194,8 @@ def _run_dbt(select: Collection, exclude: Collection, full_refresh: bool) -> tup
     from dbt.cli.flags import Flags
     from dbt_common.context import set_invocation_context
 
+    log.info(f"dbt run with {select=}, {exclude=}, {full_refresh=}")
+
     args: Flags = copy.copy(_run_task_cache["args"])
     args.__dict__['select'] = tuple(select)
     args.__dict__['exclude'] = tuple(exclude)
@@ -215,8 +217,14 @@ def _run_dbt(select: Collection, exclude: Collection, full_refresh: bool) -> tup
         log.exception("RunTask invocation failed")
         return False, repr(exc)
 
+    # log results
+    for node_result in results.results:
+        if node_result.status in ["error", "fail", "runtime error"]:
+            log.error(f"{node_result.node.name}: {node_result.message}")
+        else:
+            log.info(f"{node_result.node.name}: {node_result.message}")
+
     if not success:
-        _log_exception(results)
         return False, "dbt reported failure"
     return True, None
 
