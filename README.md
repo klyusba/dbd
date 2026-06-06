@@ -119,6 +119,16 @@ docker compose -f docker-compose.e2e-bq.yml build
 docker compose -f docker-compose.e2e-pg.yml run --rm --build e2e
 ```
 
+view logs:
+```bash
+docker compose -f docker-compose.e2e-pg.yml logs manager
+```
+
+clean up
+```bash
+docker compose -f docker-compose.e2e-pg.yml down -v  
+```
+
 The `e2e` container uploads a sample dbt project to fake-gcs, posts a job to
 the manager, polls `/job/{id}` until it terminates, and exits non-zero if the
 job didn't finish `done`. Sample project lives in `docker/e2e/sample-project/`.
