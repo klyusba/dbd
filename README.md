@@ -126,7 +126,7 @@ docker compose -f docker-compose.e2e-pg.yml logs manager
 
 clean up
 ```bash
-docker compose -f docker-compose.e2e-pg.yml down -v  
+docker compose -f docker-compose.e2e-pg.yml down -v
 ```
 
 The `e2e` container uploads a sample dbt project to fake-gcs, posts a job to
