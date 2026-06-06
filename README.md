@@ -115,8 +115,8 @@ emulators — no real GCP credentials needed:
 Run the full stack:
 
 ```bash
-docker compose -f docker-compose.e2e.yml build
-docker compose -f docker-compose.e2e.yml run --rm --build e2e
+docker compose -f docker-compose.e2e-bq.yml build
+docker compose -f docker-compose.e2e-pg.yml run --rm --build e2e
 ```
 
 The `e2e` container uploads a sample dbt project to fake-gcs, posts a job to

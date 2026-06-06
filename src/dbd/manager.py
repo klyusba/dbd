@@ -92,8 +92,6 @@ def _make_session(socket_path: Path) -> aiohttp.ClientSession:
 
 async def _spawn_worker(app: web.Application, project_url: str) -> Worker:
     socket_path = _socket_for(app[RUNTIME_DIR])
-    socket_path.parent.mkdir(parents=True, exist_ok=True)
-    socket_path.unlink(missing_ok=True)
 
     cmd = [
         "uv", "run", "dbd-worker",
@@ -103,8 +101,8 @@ async def _spawn_worker(app: web.Application, project_url: str) -> Worker:
     log.info("spawning worker for %s: %s", project_url, " ".join(cmd))
     process = await asyncio.create_subprocess_exec(
         *cmd,
-        stdout=None,
-        stderr=None,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
         env=os.environ.copy(),
     )
 

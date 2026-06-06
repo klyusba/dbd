@@ -1,0 +1,94 @@
+# End-to-end test stack for dbd (PostgreSQL).
+#
+#   docker compose -f docker-compose.e2e-pg.yml build
+#   docker compose -f docker-compose.e2e-pg.yml run --rm e2e
+#
+# The `e2e` service uploads a sample dbt project to the fake-gcs-server, posts
+# a job to the dbd manager, and polls until it reaches a terminal state.
+
+services:
+  fake-gcs:
+    image: fsouza/fake-gcs-server:1.49.2
+    command:
+      - -scheme=http
+      - -host=0.0.0.0
+      - -port=4443
+      - -public-host=fake-gcs:4443
+      # external-url is what fake-gcs embeds in mediaLink responses; without
+      # this it leaks 0.0.0.0 into URLs and download_to_filename then tries
+      # to connect to 0.0.0.0 from inside the worker container.
+      - -external-url=http://fake-gcs:4443
+      - -backend=memory
+      - -log-level=warn
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4443/storage/v1/b"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dbd
+      POSTGRES_PASSWORD: dbd
+      POSTGRES_DB: dbd
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dbd -d dbd"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  manager:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile-pg
+    environment:
+      DBD_LOG_LEVEL: INFO
+      DBD_MAX_WORKERS: "1"
+      DBD_WORKER_BOOT_TIMEOUT: "5"
+      DBD_WAREHOUSE: postgres
+      DBD_PG_HOST: postgres
+      DBD_PG_PORT: "5432"
+      DBD_PG_USER: dbd
+      DBD_PG_PASSWORD: dbd
+      DBD_PG_DBNAME: dbd
+      DBD_PG_SCHEMA: public
+      DBD_PG_THREADS: "4"
+      # Tell the google-cloud-storage client to talk to fake-gcs.
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
+      # Stop ADC from looking for real credentials.
+      GOOGLE_CLOUD_PROJECT: emulator-project
+    depends_on:
+      fake-gcs:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # The manager has no /health route; any response (even 404) means it's up.
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8080/job/probe || test $? -eq 22"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  e2e:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile-test
+    entrypoint: ["/bin/bash", "/app/run_pg.sh"]
+    environment:
+      MANAGER_URL: http://manager:8080
+      GCS_HOST: http://fake-gcs:4443
+      GCS_BUCKET: dbd-e2e
+      PROJECT_PREFIX: sample-project
+      STORAGE_EMULATOR_HOST: http://fake-gcs:4443
+      GOOGLE_CLOUD_PROJECT: emulator-project
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: dbd
+      PGPASSWORD: dbd
+      PGDATABASE: dbd
+    volumes:
+      - ./docker:/app/docker:ro
+    depends_on:
+      manager:
+        condition: service_healthy

@@ -9,8 +9,8 @@ import urllib.error
 import urllib.request
 
 
-def _post_job(manager: str, project_url: str) -> str:
-    payload = json.dumps({"url": project_url}).encode()
+def _post_job(manager: str, project_url: str, select: str) -> str:
+    payload = json.dumps({"url": project_url, "select": select}).encode()
     req = urllib.request.Request(
         f"{manager}/job",
         data=payload,
@@ -38,12 +38,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manager", required=True)
     parser.add_argument("--url", required=True, help="gs:// URL of the dbt project")
+    parser.add_argument("--select", required=True, help="selected models")
     parser.add_argument("--timeout", type=float, default=300.0)
     parser.add_argument("--poll-interval", type=float, default=2.0)
     args = parser.parse_args()
 
     print(f"[run_job] POST {args.manager}/job url={args.url}")
-    job_id = _post_job(args.manager, args.url)
+    job_id = _post_job(args.manager, args.url, args.select)
     print(f"[run_job] accepted job_id={job_id}")
 
     deadline = time.monotonic() + args.timeout

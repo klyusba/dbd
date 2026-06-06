@@ -8,3 +8,11 @@ model-paths: ["models"]
 models:
   dbd_e2e:
     +materialized: table
+    staging:
+      +materialized: table
+    intermediate:
+      +materialized: table
+    marts:
+      +materialized: table
+    incremental:
+      +materialized: incremental

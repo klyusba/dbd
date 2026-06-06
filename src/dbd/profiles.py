@@ -58,14 +58,39 @@ def _sqlite_output(project_dir: Path) -> dict[str, Any]:
     }
 
 
+def _postgres_output() -> dict[str, Any]:
+    host = os.environ.get("DBD_PG_HOST", "localhost")
+    port = int(os.environ.get("DBD_PG_PORT", "5432"))
+    user = os.environ.get("DBD_PG_USER")
+    if not user:
+        raise RuntimeError("set DBD_PG_USER to the PostgreSQL user")
+    password = os.environ.get("DBD_PG_PASSWORD", "")
+    dbname = os.environ.get("DBD_PG_DBNAME")
+    if not dbname:
+        raise RuntimeError("set DBD_PG_DBNAME to the PostgreSQL database name")
+    return {
+        "type": "postgres",
+        "host": host,
+        "port": port,
+        "user": user,
+        "password": password,
+        "dbname": dbname,
+        "schema": os.environ.get("DBD_PG_SCHEMA", "public"),
+        "threads": int(os.environ.get("DBD_PG_THREADS", "4")),
+        "connect_timeout": int(os.environ.get("DBD_PG_CONNECT_TIMEOUT", "10")),
+    }
+
+
 def _build_output(project_dir: Path) -> dict[str, Any]:
     warehouse = os.environ.get("DBD_WAREHOUSE", "bigquery").lower()
     if warehouse == "bigquery":
         return _bigquery_output()
     if warehouse == "sqlite":
         return _sqlite_output(project_dir)
+    if warehouse == "postgres":
+        return _postgres_output()
     raise RuntimeError(
-        f"unsupported DBD_WAREHOUSE={warehouse!r} (expected 'bigquery' or 'sqlite')",
+        f"unsupported DBD_WAREHOUSE={warehouse!r} (expected 'bigquery', 'sqlite', or 'postgres')",
     )
 
 
@@ -73,8 +98,9 @@ def write_profiles(project_dir: Path) -> Path:
     """Write a ``profiles.yml`` next to ``dbt_project.yml``.
 
     Adapter is selected via ``DBD_WAREHOUSE`` (``bigquery`` by default,
-    ``sqlite`` also supported). Connection details are taken from environment
-    variables so the same worker binary works against any project.
+    ``sqlite`` and ``postgres`` also supported). Connection details are taken
+    from environment variables so the same worker binary works against any
+    project.
     """
     profile_name = _read_profile_name(project_dir)
     output = _build_output(project_dir)

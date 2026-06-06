@@ -182,15 +182,26 @@ def _warm_up_dbt(project_dir: Path) -> None:
     log.info("dbt warm-up complete")
 
 
+def _log_exception(result):
+    for node_result in result.results:
+        if node_result.status in ["error", "fail", "runtime error"]:
+            log.error(f"{node_result.node.name}: {node_result.message}")
+
+
 def _run_dbt(select: Collection, exclude: Collection, full_refresh: bool) -> tuple[bool, str | None]:
     """Execute a dbt job by instantiating ``RunTask`` directly with cached state."""
     from dbt.task.run import RunTask
     from dbt.cli.flags import Flags
+    from dbt_common.context import set_invocation_context
 
     args: Flags = copy.copy(_run_task_cache["args"])
     args.__dict__['select'] = tuple(select)
     args.__dict__['exclude'] = tuple(exclude)
     args.__dict__['full_refresh'] = full_refresh
+
+    set_invocation_context(env=dict(os.environ))
+
+    # FIXME dbt will fail if a table appear in the middle of process
 
     try:
         task = RunTask(
@@ -205,6 +216,7 @@ def _run_dbt(select: Collection, exclude: Collection, full_refresh: bool) -> tup
         return False, repr(exc)
 
     if not success:
+        _log_exception(results)
         return False, "dbt reported failure"
     return True, None
 
@@ -314,12 +326,13 @@ async def _serve(socket_path: Path, project_dir: Path) -> None:
     await runner.setup()
     site = web.UnixSite(runner, path=str(socket_path))
     await site.start()
-    log.info("worker listening on %s (project=%s)", socket_path, project_dir)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGKILL):
+    for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
+
+    log.info("worker listening on %s (project=%s)", socket_path, project_dir)
     try:
         await stop.wait()
     finally:
@@ -348,6 +361,7 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     args = _parse_args(argv)
+    log.info("starting dbd worker at %s", args.socket_path)
 
     socket_path = Path(args.socket_path)
     socket_path.parent.mkdir(parents=True, exist_ok=True)
