@@ -43,21 +43,21 @@ echo "[e2e] submitting 3 concurrent jobs (job-a1 + job-a2 -> project-a, job-b1 -
 
 (
     python3 /app/run_job.py \
-        --manager "${MANAGER_URL}" --url "${GS_A}" --select "stg_customers+" \
+        --manager "${MANAGER_URL}" --url "${GS_A}" --select stg_customers,customers_incremental,order_summary \
         >"${tmpdir}/job-a1.log" 2>&1
     echo $? >"${tmpdir}/job-a1.exit"
 ) &
 
 (
     python3 /app/run_job.py \
-        --manager "${MANAGER_URL}" --url "${GS_A}" --select "stg_orders+" \
+        --manager "${MANAGER_URL}" --url "${GS_A}" --select stg_orders,orders_incremental,daily_revenue \
         >"${tmpdir}/job-a2.log" 2>&1
     echo $? >"${tmpdir}/job-a2.exit"
 ) &
 
 (
     python3 /app/run_job.py \
-        --manager "${MANAGER_URL}" --url "${GS_B}" --select "stg_products+" \
+        --manager "${MANAGER_URL}" --url "${GS_B}" --select stg_products,products_incremental,product_metrics \
         >"${tmpdir}/job-b1.log" 2>&1
     echo $? >"${tmpdir}/job-b1.exit"
 ) &

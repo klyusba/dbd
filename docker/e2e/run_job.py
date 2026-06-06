@@ -10,7 +10,7 @@ import urllib.request
 
 
 def _post_job(manager: str, project_url: str, select: str) -> str:
-    payload = json.dumps({"url": project_url, "select": select}).encode()
+    payload = json.dumps({"url": project_url, "select": select.split(',')}).encode()
     req = urllib.request.Request(
         f"{manager}/job",
         data=payload,

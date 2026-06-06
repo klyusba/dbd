@@ -44,8 +44,8 @@ services:
       dockerfile: docker/Dockerfile-pg
     environment:
       DBD_LOG_LEVEL: INFO
-      DBD_MAX_WORKERS: "1"
-      DBD_WORKER_BOOT_TIMEOUT: "5"
+      DBD_MAX_THREADS_PER_WORKER: "4"
+      DBD_WORKER_BOOT_TIMEOUT: "30"
       DBD_WAREHOUSE: postgres
       DBD_PG_HOST: postgres
       DBD_PG_PORT: "5432"

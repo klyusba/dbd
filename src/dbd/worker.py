@@ -26,7 +26,7 @@ from .profiles import write_profiles
 log = logging.getLogger("dbd.worker")
 
 # Tunables sourced from the environment.
-MAX_WORKERS = int(os.environ.get("DBD_MAX_WORKERS", "1"))
+MAX_THREADS = int(os.environ.get("DBD_MAX_THREADS_PER_WORKER", "1"))
 SHUTDOWN_TIMEOUT = float(os.environ.get("DBD_SHUTDOWN_TIMEOUT", "600"))
 
 # aiohttp app keys
@@ -292,11 +292,8 @@ def build_app(project_dir: Path) -> web.Application:
     app[PROJECT_DIR] = project_dir
     app[JOBS] = {}
     app[TASKS] = set()
-    # dbt is CPU/IO heavy and not asyncio-friendly. Default to one job at a
-    # time (set DBD_MAX_WORKERS to allow more) to avoid fighting dbt's
-    # global state.
     app[EXECUTOR] = ThreadPoolExecutor(
-        max_workers=MAX_WORKERS, thread_name_prefix="dbt",
+        max_workers=MAX_THREADS, thread_name_prefix="dbt",
     )
     app.router.add_get("/health", health)
     app.router.add_post("/job", post_job)
