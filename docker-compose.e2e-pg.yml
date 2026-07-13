@@ -41,7 +41,7 @@ services:
   manager:
     build:
       context: .
-      dockerfile: docker/Dockerfile-pg
+      dockerfile: docker/Dockerfile-manager
     environment:
       DBD_LOG_LEVEL: INFO
       DBD_MAX_THREADS_PER_WORKER: "4"
@@ -73,7 +73,7 @@ services:
   e2e:
     build:
       context: .
-      dockerfile: docker/Dockerfile-test
+      dockerfile: docker/Dockerfile
     entrypoint: ["/bin/bash", "/app/run_pg.sh"]
     environment:
       MANAGER_URL: http://manager:8080

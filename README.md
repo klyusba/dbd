@@ -48,14 +48,6 @@ process). Pick the adapter with `DBD_WAREHOUSE` (`bigquery` by default,
 GCP credentials are picked up via Application Default Credentials (e.g.
 `GOOGLE_APPLICATION_CREDENTIALS` or `gcloud auth application-default login`).
 
-### SQLite (`DBD_WAREHOUSE=sqlite`)
-
-| variable | meaning | default |
-| --- | --- | --- |
-| `DBD_SQLITE_PATH` | absolute path to the `.db` file | `<project_dir>/dbd.sqlite` |
-| `DBD_SQLITE_SCHEMA` | attached schema name dbt writes to | `main` |
-| `DBD_SQLITE_THREADS` | dbt threads | `1` |
-
 ## API
 
 ### `POST /job`
@@ -96,7 +88,7 @@ src/dbd/
   manager.py    # TCP HTTP server, worker registry, job routing
   worker.py     # Unix-socket HTTP server, dbt runner
   gcs.py        # gs:// downloader
-  profiles.py   # writes BigQuery profiles.yml
+  profiles.py   # writes profiles.yml
   models.py     # JobSpec / JobStatus
 ```
 
@@ -106,16 +98,11 @@ A self-contained docker-compose stack exercises the whole pipeline against
 emulators — no real GCP credentials needed:
 
 - `fake-gcs-server` plays the role of GCS (honoured via `STORAGE_EMULATOR_HOST`).
-- `goccy/bigquery-emulator` plays the role of BigQuery. The dbd image ships a
-  tiny `.pth`-activated shim (`docker/bq_emulator_patch.py`) that redirects
-  `google.cloud.bigquery.Client` to the emulator endpoint with anonymous
-  credentials whenever `BIGQUERY_EMULATOR_HOST` is set. The shim is a no-op when
-  the env var is unset, so production builds are unaffected.
 
 Run the full stack:
 
 ```bash
-docker compose -f docker-compose.e2e-bq.yml build
+docker compose -f docker-compose.e2e-pg.yml build
 docker compose -f docker-compose.e2e-pg.yml run --rm --build e2e
 ```
 
