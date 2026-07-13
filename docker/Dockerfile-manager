@@ -29,7 +29,7 @@ RUN uv sync --frozen --no-install-project
 
 # Now copy the source and install the project itself.
 COPY src ./src
-RUN uv sync --frozen
+RUN uv sync --extra postgres
 
 # Tell `uv run` (used by the manager to spawn workers) not to re-resolve or
 # re-sync on every invocation; the env is already complete.
