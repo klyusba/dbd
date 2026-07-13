@@ -35,29 +35,6 @@ def _bigquery_output() -> dict[str, Any]:
     }
 
 
-def _sqlite_output(project_dir: Path) -> dict[str, Any]:
-    # dbt-sqlite needs an absolute directory holding the .db file plus a
-    # schema name; the "main" attached DB is what dbt writes against.
-    db_path = os.environ.get("DBD_SQLITE_PATH")
-    if db_path:
-        db_file = Path(db_path).expanduser().resolve()
-    else:
-        db_file = (project_dir / "dbd.sqlite").resolve()
-    db_file.parent.mkdir(parents=True, exist_ok=True)
-
-    schema = os.environ.get("DBD_SQLITE_SCHEMA", "main")
-    threads = int(os.environ.get("DBD_SQLITE_THREADS", "1"))
-
-    return {
-        "type": "sqlite",
-        "threads": threads,
-        "database": db_file.stem,
-        "schema": schema,
-        "schemas_and_paths": {schema: str(db_file)},
-        "schema_directory": str(db_file.parent),
-    }
-
-
 def _postgres_output() -> dict[str, Any]:
     host = os.environ.get("DBD_PG_HOST", "localhost")
     port = int(os.environ.get("DBD_PG_PORT", "5432"))
@@ -85,12 +62,10 @@ def _build_output(project_dir: Path) -> dict[str, Any]:
     warehouse = os.environ.get("DBD_WAREHOUSE", "bigquery").lower()
     if warehouse == "bigquery":
         return _bigquery_output()
-    if warehouse == "sqlite":
-        return _sqlite_output(project_dir)
     if warehouse == "postgres":
         return _postgres_output()
     raise RuntimeError(
-        f"unsupported DBD_WAREHOUSE={warehouse!r} (expected 'bigquery', 'sqlite', or 'postgres')",
+        f"unsupported DBD_WAREHOUSE={warehouse!r} (expected 'bigquery', or 'postgres')",
     )
 
 
